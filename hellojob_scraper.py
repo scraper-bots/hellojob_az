@@ -1,33 +1,32 @@
 #!/usr/bin/env python3
 """
-Final HelloJob.az Listing Scraper - Optimized for reliability
-Extracts complete candidate data from listing pages + phone numbers
+HelloJob.az Working Scraper
+Uses the proven working approach from test
 """
-
 import asyncio
 import aiohttp
 import csv
 import re
-from typing import List, Dict
 from urllib.parse import unquote
 from dotenv import load_dotenv
 import os
+import time
 
 load_dotenv()
 
-async def scrape_hellojob_listings(start_page: int = 1, max_pages: int = 5):
-    """Scrape candidates from listing pages with phone numbers"""
+async def scrape_hellojob(start_page: int = 1, max_pages: int = 10):
+    """Main scraping function using the working approach"""
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8'
+        'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,ru;q=0.7,az;q=0.6'
     }
     
     async with aiohttp.ClientSession(headers=headers) as session:
-        print("🔐 Authenticating...")
+        print("🔐 Authenticating with HelloJob.az...")
         
-        # Login process
+        # Login
         async with session.get("https://www.hellojob.az/account/login") as response:
             xsrf_token = None
             for name, morsel in response.cookies.items():
@@ -57,14 +56,22 @@ async def scrape_hellojob_listings(start_page: int = 1, max_pages: int = 5):
             result = await response.json()
             print(f"✅ Login: {result.get('message', 'Success')}")
         
-        all_candidates = []
+        # Get total pages
+        async with session.get("https://www.hellojob.az/hr/cv-pool") as response:
+            html = await response.text()
+            page_numbers = re.findall(r'page=(\d+)', html)
+            total_pages = max(int(p) for p in page_numbers) if page_numbers else 633
         
-        # Process each page
-        for page in range(start_page, start_page + max_pages):
-            print(f"\n📄 Processing page {page}...")
-            
+        end_page = min(start_page + max_pages - 1, total_pages)
+        print(f"🚀 Scraping pages {start_page} to {end_page} (Total available: {total_pages})")
+        
+        all_candidates = []
+        start_time = time.time()
+        
+        # Scrape each page
+        for page in range(start_page, end_page + 1):
             try:
-                page_url = f"https://www.hellojob.az/hr/cv-pool?page={page}" if page > 1 else "https://www.hellojob.az/hr/cv-pool"
+                page_url = "https://www.hellojob.az/hr/cv-pool" if page == 1 else f"https://www.hellojob.az/hr/cv-pool?page={page}"
                 
                 async with session.get(page_url) as response:
                     if response.status != 200:
@@ -73,12 +80,11 @@ async def scrape_hellojob_listings(start_page: int = 1, max_pages: int = 5):
                     
                     html = await response.text()
                     
-                    # Extract candidate data using regex patterns
-                    # Pattern to find all candidate items
+                    # Extract candidate items
                     item_pattern = r'<div class="vacancies__item vacancies__item--custom" data-id="(\d+)"[^>]*>(.*?)</div>\s*</div>\s*</div>'
                     matches = re.findall(item_pattern, html, re.DOTALL)
                     
-                    print(f"Found {len(matches)} candidates")
+                    print(f"📄 Page {page}: {len(matches)} candidates found")
                     
                     for cv_id, item_content in matches:
                         try:
@@ -86,13 +92,12 @@ async def scrape_hellojob_listings(start_page: int = 1, max_pages: int = 5):
                             title_match = re.search(r'class="vacancies__title[^"]*"[^>]*>([^<]+)</a>', item_content)
                             position = title_match.group(1).strip() if title_match else ""
                             
-                            # Extract name and age from company div
+                            # Extract name and age
                             company_match = re.search(r'class="vacancies__company"[^>]*>([^<]+)</div>', item_content)
                             name = ""
                             age = ""
                             if company_match:
                                 company_text = company_match.group(1).strip()
-                                # Extract name and age: "Name Surname (age)"
                                 name_age_match = re.match(r'(.+?)\s*\((\d+)\)', company_text)
                                 if name_age_match:
                                     name = name_age_match.group(1).strip()
@@ -109,7 +114,6 @@ async def scrape_hellojob_listings(start_page: int = 1, max_pages: int = 5):
                             salary = f"{salary_match.group(1)} AZN" if salary_match else ""
                             
                             # Extract location
-                            # Look for location after pin icon
                             location_patterns = [
                                 r'svg-pin[^>]*>.*?</svg>\s*([A-Za-zəüöğışçÜÖĞIŞÇƏ\s]+)',
                                 r'</svg>\s*([A-Za-zəüöğışçÜÖĞIŞÇƏ]+)\s*</li>'
@@ -149,7 +153,7 @@ async def scrape_hellojob_listings(start_page: int = 1, max_pages: int = 5):
                                 'posted_date': posted_date,
                                 'has_cv_file': 'Yes' if has_download else 'No',
                                 'cv_url': f"https://www.hellojob.az/hr/cv-pool/cv/{cv_id}",
-                                'phone': ''  # Will be filled later
+                                'phone': ''
                             }
                             
                             all_candidates.append(candidate)
@@ -157,48 +161,67 @@ async def scrape_hellojob_listings(start_page: int = 1, max_pages: int = 5):
                         except Exception as e:
                             print(f"  ❌ Error parsing candidate {cv_id}: {e}")
                             continue
-                    
+                
+                # Small delay between pages
+                await asyncio.sleep(0.5)
+                
             except Exception as e:
                 print(f"❌ Error processing page {page}: {e}")
                 continue
         
-        print(f"\n📱 Getting phone numbers for {len(all_candidates)} candidates...")
+        print(f"👥 Total candidates extracted: {len(all_candidates)}")
         
-        # Get phone numbers concurrently
+        if not all_candidates:
+            return []
+        
+        # Get phone numbers
+        print(f"📱 Getting phone numbers for {len(all_candidates)} candidates...")
+        
+        semaphore = asyncio.Semaphore(30)
+        
         async def get_phone(candidate):
-            try:
-                async with session.get(f"https://www.hellojob.az/hr/cv-pool/cv/{candidate['cv_id']}/show-phone") as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if not data.get('error', True):
-                            candidate['phone'] = data.get('phone', '')
-                            if candidate['phone']:
-                                print(f"  ✅ {candidate['name']} - {candidate['phone']}")
-                            return candidate
-            except:
-                pass
-            return candidate
+            async with semaphore:
+                try:
+                    async with session.get(f"https://www.hellojob.az/hr/cv-pool/cv/{candidate['cv_id']}/show-phone") as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            if not data.get('error', True):
+                                candidate['phone'] = data.get('phone', '')
+                                if candidate['phone']:
+                                    print(f"  ✅ {candidate['name']} - {candidate['phone']}")
+                                return candidate
+                except:
+                    pass
+                return candidate
         
         # Process phones in batches
-        batch_size = 25
+        batch_size = 50
         for i in range(0, len(all_candidates), batch_size):
             batch = all_candidates[i:i + batch_size]
             tasks = [get_phone(candidate) for candidate in batch]
             await asyncio.gather(*tasks, return_exceptions=True)
-            print(f"📊 Processed {min(i + batch_size, len(all_candidates))}/{len(all_candidates)} candidates")
             
-            # Small delay between batches
-            await asyncio.sleep(0.5)
+            progress = min(i + batch_size, len(all_candidates))
+            with_phones = sum(1 for c in all_candidates if c.get('phone'))
+            print(f"📊 Progress: {progress}/{len(all_candidates)} - {with_phones} phone numbers found")
+            
+            await asyncio.sleep(0.3)
+        
+        elapsed = time.time() - start_time
+        print(f"⏱️ Total scraping time: {elapsed:.1f} seconds")
         
         return all_candidates
 
-def export_candidates_csv(candidates: List[Dict], filename: str = "hellojob_final_export.csv"):
+def export_to_csv(candidates, filename=None):
     """Export candidates to CSV with phone as first column"""
     if not candidates:
         print("❌ No candidates to export")
         return
     
-    # Phone number first column as requested
+    if filename is None:
+        timestamp = int(time.time())
+        filename = f"hellojob_export_{timestamp}.csv"
+    
     fieldnames = [
         'phone', 'name', 'age', 'position', 'salary', 'location',
         'completion_percentage', 'posted_date', 'has_cv_file', 'cv_id', 'cv_url'
@@ -211,25 +234,35 @@ def export_candidates_csv(candidates: List[Dict], filename: str = "hellojob_fina
     
     with_phone = sum(1 for c in candidates if c.get('phone'))
     print(f"\n💾 ✅ Exported {len(candidates)} candidates to {filename}")
-    print(f"📊 {with_phone}/{len(candidates)} candidates have phone numbers")
+    print(f"📊 {with_phone}/{len(candidates)} candidates have phone numbers ({with_phone/len(candidates)*100:.1f}%)")
+    
+    return filename
 
 async def main():
     import sys
     
     start_page = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    max_pages = int(sys.argv[2]) if len(sys.argv) > 2 else 5
     
-    print("🌟 Final HelloJob.az Listing Scraper")
-    print(f"📄 Scraping pages {start_page} to {start_page + max_pages - 1}")
+    if len(sys.argv) > 2:
+        if sys.argv[2].lower() == 'all':
+            max_pages = 633
+        else:
+            max_pages = int(sys.argv[2])
+    else:
+        max_pages = 10
+    
+    print("🌟 HelloJob.az Working Scraper")
     print("=" * 60)
+    print(f"🔑 Login: {os.getenv('login', 'Not configured')}")
+    print(f"📄 Scraping pages {start_page} to {start_page + max_pages - 1}")
+    print("-" * 60)
     
-    candidates = await scrape_hellojob_listings(start_page, max_pages)
+    candidates = await scrape_hellojob(start_page, max_pages)
     
     if candidates:
-        filename = f"hellojob_final_{start_page}_to_{start_page + max_pages - 1}.csv"
-        export_candidates_csv(candidates, filename)
+        filename = export_to_csv(candidates)
         
-        print(f"\n📋 Sample results:")
+        print(f"\n📋 Sample of first 3 candidates:")
         print("-" * 60)
         for i, c in enumerate(candidates[:3], 1):
             print(f"{i}. {c['name']} ({c['age']} years) - {c['position']}")
@@ -238,14 +271,17 @@ async def main():
             print(f"   📍 Location: {c['location'] or 'Not specified'}")
             print(f"   📄 Completion: {c['completion_percentage'] or 'Unknown'}")
             print(f"   🗓️ Posted: {c['posted_date'] or 'Unknown'}")
-            print(f"   📄 Has CV file: {c['has_cv_file']}")
             print()
         
-        print(f"🎉 Successfully scraped {len(candidates)} candidates!")
-        print(f"📞 Phone numbers are in the first column as requested")
-        print(f"🚀 Ready to scale: python final_listing_scraper.py 1 633")
+        print(f"🎉 Scraping completed successfully!")
+        print(f"✅ Exported {len(candidates)} candidates with phone numbers as first column")
+        
+        if max_pages < 50:
+            print(f"\n🚀 Ready to scale up:")
+            print(f"  • For 50 pages: python hellojob_scraper_working.py 1 50")
+            print(f"  • For all pages: python hellojob_scraper_working.py 1 all")
     else:
-        print("❌ No candidates found")
+        print("❌ No candidates extracted - check login credentials")
 
 if __name__ == "__main__":
     asyncio.run(main())

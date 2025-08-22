@@ -1,131 +1,108 @@
-# HelloJob.az Candidate Scraper
+# HelloJob.az Complete Scraper
 
-High-speed asynchronous web scraper for extracting candidate data from hellojob.az HR platform.
+High-speed async web scraper for extracting complete candidate data from hellojob.az with phone numbers.
 
 ## Features
 
-- **High-speed async scraping** using aiohttp
-- **Phone number extraction** via dedicated API endpoint
-- **Complete candidate data** including education, languages, experience
-- **CSV export** with phone number as first column
-- **Rate limiting** and error handling
-- **Session management** with automatic login
-- **Concurrent processing** with configurable limits
+✅ **Phone Numbers First** - CSV exports with phone numbers as the first column  
+✅ **Complete Data Extraction** - All candidate info from listing pages  
+✅ **High-Speed Async** - Uses aiohttp for maximum performance  
+✅ **All Pages Support** - Can scrape all 633+ pages  
+✅ **Bypass Package Limits** - Works without visiting individual CV pages  
+✅ **Phone API Integration** - Gets phone numbers via dedicated endpoint  
 
-## Setup
+## Quick Start
 
-1. Install dependencies:
+1. **Install dependencies:**
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Configure your credentials in `.env` file:
+2. **Configure credentials in `.env`:**
 ```
 login=your_email@gmail.com
 password=your_password
 ```
 
-## Usage
-
-### Basic Usage
+3. **Run the scraper:**
 ```bash
-python run_scraper.py
-```
-
-### Test Mode (first 2 pages only)
-```bash
-python run_scraper.py --test
-```
-
-### Limit pages
-```bash
-python run_scraper.py --max-pages 10
-```
-
-### Custom output file
-```bash
-python run_scraper.py --output my_candidates.csv
-```
-
-### Verbose logging
-```bash
-python run_scraper.py --verbose
-```
-
-### Advanced Usage
-```bash
+# Default: 10 pages
 python hellojob_scraper.py
+
+# Specific page range
+python hellojob_scraper.py 1 50
+
+# All pages (633+)
+python hellojob_scraper.py 1 all
 ```
 
-## Output Format
+## Usage Examples
 
-The CSV file contains the following columns (phone number first):
+```bash
+# Test with first 5 pages
+python hellojob_scraper.py 1 5
 
-- **phone**: Candidate phone number (extracted via API)
-- **name**: Full name
-- **age**: Age
-- **position**: Desired position/job title
-- **salary**: Expected salary
-- **location**: Location/city
-- **completion_percentage**: CV completion percentage
-- **posted_date**: Date when CV was posted
-- **cv_id**: Internal CV ID
-- **cv_url**: Direct URL to candidate's CV
-- **birth_date**: Date of birth
-- **education**: Education background (semicolon separated)
-- **languages**: Languages (semicolon separated)
+# Scrape pages 100-200
+python hellojob_scraper.py 100 100
+
+# Scrape all pages from beginning
+python hellojob_scraper.py 1 all
+
+# Start from page 50, scrape all remaining
+python hellojob_scraper.py 50 all
+```
+
+## Output
+
+The scraper generates CSV files with the following columns (phone number first):
+
+| Column | Description |
+|--------|-------------|
+| **phone** | Phone number (from API) |
+| **name** | Full name |
+| **age** | Age |
+| **position** | Job position/title |
+| **salary** | Expected salary in AZN |
+| **location** | City/location |
+| **completion_percentage** | CV completion % |
+| **posted_date** | Date when CV was posted |
+| **has_cv_file** | Whether downloadable CV exists |
+| **cv_id** | Internal CV ID |
+| **cv_url** | Direct URL to CV page |
 
 ## Performance
 
-- **Concurrent requests**: 10 simultaneous requests
-- **Rate limiting**: Built-in delays between batches
-- **Error recovery**: Automatic retry for failed requests
-- **Memory efficient**: Processes candidates in batches
+- **Concurrent Processing**: 35 simultaneous requests
+- **Speed**: ~90 candidates per 3 pages in ~30 seconds
+- **Phone Success Rate**: ~87% of candidates have phone numbers
+- **Memory Efficient**: Processes in batches
 
-## Technical Details
+## Architecture
 
-### Architecture
-- Asynchronous HTTP client (aiohttp)
-- BeautifulSoup for HTML parsing
-- Dataclass-based candidate model
-- Session management with automatic login
-- Semaphore-based concurrency control
+- **Async HTTP Client**: aiohttp for high-speed concurrent requests
+- **Smart Parsing**: Regex-based data extraction from HTML
+- **Session Management**: Automatic XSRF token authentication
+- **Rate Limiting**: Built-in delays to respect server limits
+- **Error Recovery**: Robust exception handling
 
-### Rate Limiting
-- 1 second delay between batches
-- 2 second delay between page batches
-- Maximum 10 concurrent requests
+## Data Extraction
 
-### Error Handling
-- Connection timeout handling
-- Login failure detection
-- Individual request failure recovery
-- Comprehensive logging
+The scraper extracts data directly from CV pool listing pages, avoiding the need to visit individual CV pages (which have package limitations). It then enriches the data with phone numbers via the `/show-phone` API endpoint.
 
-## Scraped Data Structure
-
-```python
-@dataclass
-class Candidate:
-    phone: str              # From /show-phone endpoint
-    name: str              # From candidate page
-    age: int               # Extracted from name section
-    position: str          # Job position
-    salary: str            # Expected salary
-    location: str          # City/location
-    completion_percentage: str  # CV completion %
-    posted_date: str       # When CV was posted
-    cv_id: str             # Internal ID
-    cv_url: str            # Full URL to CV
-    birth_date: Optional[str]   # Date of birth
-    education: List[str]   # Education history
-    languages: List[str]   # Language skills
+### Sample Output:
+```csv
+phone,name,age,position,salary,location,completion_percentage,posted_date,has_cv_file,cv_id,cv_url
+994773041724,Fatimə Mütəllimova,20,Satış məsləhətçisi,500 AZN,Bakı,85%,23 avqust 2025,No,208329,https://...
+994519699646,Orxan Nemətli,28,Developer,1000 AZN,Xaçmaz,55%,23 avqust 2025,Yes,208320,https://...
 ```
+
+## Requirements
+
+- Python 3.7+
+- aiohttp 3.9+
+- python-dotenv
+- Valid HelloJob.az HR account
 
 ## Legal Notice
 
-This scraper is designed for legitimate HR and recruitment purposes only. Please ensure you comply with hellojob.az terms of service and applicable data protection laws when using this tool.
-
-## Support
-
-For issues or questions, check the logs in `scraper.log` file for detailed error information.
+This tool is designed for legitimate recruitment and HR purposes. Please ensure compliance with hellojob.az terms of service and applicable data protection laws.
